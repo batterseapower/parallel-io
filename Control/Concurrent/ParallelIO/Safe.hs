@@ -1,5 +1,5 @@
 module Control.Concurrent.ParallelIO.Safe (
-    Pool(..), -- TODO: abstract
+    Pool,
     withPool, startPool, stopPool,
     enqueueOnPool,
     spawnPoolWorkerFor
