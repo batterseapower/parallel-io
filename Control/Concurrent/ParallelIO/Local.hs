@@ -22,8 +22,9 @@ module Control.Concurrent.ParallelIO.Local (
 import Control.Concurrent
 import Control.Exception.Extensible as E
 import Control.Monad
+import Control.Parallel.Strategies (seqList, r0)
 
-import System.IO.Unsafe (unsafeInterleaveIO)
+import System.IO
 
 
 -- | Type of work items you can put onto the queue. The 'Bool'
@@ -90,7 +91,7 @@ enqueueOnPool pool = writeChan (pool_queue pool)
 spawnPoolWorkerFor :: Pool -> IO ()
 spawnPoolWorkerFor pool = do
     forkIO $ workerLoop `E.catch` \(e :: E.SomeException) -> do
-        putStrLn $ "Exception on thread: " ++ show e
+        hPutStrLn stderr $ "Exception on thread: " ++ show e
         throwTo (pool_spawnedby pool) $ ErrorCall $ "Control.Concurrent.ParallelIO: parallel thread died.\n" ++ show e
     return ()
     where
@@ -127,11 +128,13 @@ parallel_ pool (x1:xs) = do
         enqueueOnPool pool $ do
             x
             modifyMVar count $ \i -> do
-                let i2 = i - 1
-                    kill = i2 == 0
+                let i' = i - 1
+                    kill = i' == 0
                 when kill $ putMVar pause ()
-                return (i2, kill)
+                return (i', kill)
     x1
+    -- NB: it is safe to spawn a worker because at least one will die - the
+    -- length of xs must be strictly greater than 0.
     spawnPoolWorkerFor pool
     takeMVar pause
 
@@ -180,16 +183,18 @@ parallel pool (x1:xs) = do
 --     This should minimize contention and hence pre-emption, while also preventing
 --     starvation.
 --
---  2. On return it is not necessarily true that any action has been performed:
---     the result of running actions will be yielded lazily to the output list
---     as they are demanded (with one thread) or as they are produced (with more).
+--  2. On return all actions have been performed.
+--
+--  3. The result of running actions appear in the list in undefined order, but which
+--     is likely to be very similar to the order of completion.
 --
 --  3. The above properties are true even if 'parallelInterleaved' is used by an
 --     action which is itself being executed by 'parallelInterleaved'.
 parallelInterleaved :: Pool -> [IO a] -> IO [a]
 parallelInterleaved _    [] = return []
-parallelInterleaved pool xs | pool_threadcount pool <= 1 = sequence (map unsafeInterleaveIO xs)
-parallelInterleaved pool xs = do
+parallelInterleaved pool xs | pool_threadcount pool <= 1 = sequence xs
+parallelInterleaved _    [x] = fmap return x
+parallelInterleaved pool (x1:xs) = do
     let thecount = length xs
     count <- newMVar $ thecount
     resultschan <- newChan
@@ -197,7 +202,12 @@ parallelInterleaved pool xs = do
         enqueueOnPool pool $ do
             x >>= writeChan resultschan
             modifyMVar count $ \i -> let i' = i - 1 in return (i', i' == 0)
-    fmap (take thecount) $ getChanContents resultschan
+    result1 <- x1
+    -- NB: it is safe to spawn a worker because at least one will die - the
+    -- length of xs must be strictly greater than 0.
+    spawnPoolWorkerFor pool
+    results <- fmap ((result1:) . take thecount) $ getChanContents resultschan
+    seqList r0 results `seq` return results
 
 -- An alternative implementation of parallel_ might:
 --

@@ -22,10 +22,10 @@ main = do
 tests :: [Test]
 tests = [ testCase "parallel_ executes correct number of actions"       $ repeatTest parallel__execution_count_correct
         , testCase "parallel_ doesn't spawn too many threads"           $ repeatTest parallel__doesnt_spawn_too_many_threads
-        , testCase "parallel executes correct actions"                  $ repeatTest parallel_executes_correct_actions
+        --, testCase "parallel executes correct actions"                  $ repeatTest parallel_executes_correct_actions
         , testCase "parallel doesn't spawn too many threads"            $ repeatTest parallel_doesnt_spawn_too_many_threads
         --, testCase "parallelInterleaved executes correct actions"       $ repeatTest parallelInterleaved_executes_correct_actions
-        --, testCase "parallelInterleaved doesn't spawn too many threads" $ repeatTest parallelInterleaved_doesnt_spawn_too_many_threads
+        , testCase "parallelInterleaved doesn't spawn too many threads" $ repeatTest parallelInterleaved_doesnt_spawn_too_many_threads
         ]
 
 parallel__execution_count_correct n = do
@@ -67,4 +67,4 @@ atomicModifyIORef_ :: IORef a -> (a -> a) -> IO a
 atomicModifyIORef_ ref f = atomicModifyIORef ref (\x -> let x' = f x in x' `seq` (x', x'))
 
 repeatTest :: (Int -> IO Bool) -> IO ()
-repeatTest testcase = forM_ [0..100] $ \n -> testcase n @? show n
+repeatTest testcase = forM_ [0..100] $ \n -> testcase n @? "n=" ++ show n
