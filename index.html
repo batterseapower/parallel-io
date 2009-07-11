@@ -1,0 +1,131 @@
+---
+username: batterseapower
+author_name: Max Bolingbroke
+author_email: batterseapower@hotmail.com
+repository: parallel-io
+hackage_packages:
+  - name: parallel-io
+    doc_module: Control-Concurrent-ParallelIO-Global.html
+---
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+    <title>{{ page.repository }} @ GitHub</title>
+    <link rel="stylesheet" href="http://{{ page.username }}.github.com/styles/main.css">
+    <link rel="stylesheet" href="http://{{ page.username }}.github.com/styles/syntax.css">
+</head>
+<body>
+    <a href="http://github.com/{{ page.username }}/{{ page.repository }}">
+        <img style="position: absolute; top: 0; right: 0; border: 0;" src="http://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub" />
+    </a>
+    <div id="container">
+        <h1>
+            <a href="http://github.com/{{ page.username }}/{{ page.repository }}">{{ page.repository }}</a>
+        </h1>
+        
+        <div class="description">
+            Haskell combinators for executing IO actions in parallel on a thread pool.
+        </div>
+        
+        <h2>Description</h2>
+        <div class="section">
+            <p>It is often useful to be able to execute a number of <code>IO</code> actions in parallel, and then
+                either gather the results back up, or report completion of the actions. This package is designed to
+                support this scenario by providing a number of high-level combinators for enabling this parallelism
+                without any hard work on your part. Features include:</p>
+            
+            <ul>
+              <li>High level interface to powerful parallelism.</li>
+              <li>Finer grained interface if you prefer to manage thread pools yourself.</li>
+              <li>An effort is made to keep the number of unblocked threads running at exactly
+                  the number you request, to reduce contention for processor resources.</li>
+              <li>No hidden exceptions on background threads!</li>
+            </ul>
+        </div>
+        
+        <h2>Example</h2>
+        <div class="section">
+{% highlight haskell %}
+import Control.Concurrent.ParallelIO
+import qualified Control.Concurrent.ParallelIO.Local as Local
+
+main = do
+  -- Example with the global pool. You should call stopGlobalPool
+  -- after the last use of a global parallelism combinator - the
+  -- end of the main function is a fine place.
+  parallel_ [putStrLn "Hello", putStrLn "World"]
+  stopGlobalPool
+  
+  -- Example of an explicitly sized and passed pool. Use 2 threads.
+  Local.withPool 2 $ \pool -> do
+    Local.parallel_ pool [putStrLn "Goodbype", putStrLn "World"]
+{% endhighlight %}
+
+            <p>We can run this like so to get our parallel goodness:</p>
+
+<pre>
+$ ghc -package parallel-io -threaded Example.hs -o Example
+$ ./Example +RTS -N2
+</pre>
+        </div>
+        
+       <h2>Documentation</h2>
+        <ul>
+          {% for package in page.hackage_packages %}
+            <p>Haddock documentation is available at <a href="http://hackage.haskell.org/packages/archive/{{ package.name }}/latest/doc/html/{{ package.doc_module }}">Hackage</a>.</p>
+          {% endfor %}
+        </ul>
+        
+        <h2>Download</h2>
+        <div class="section">
+            <div class="downloadoption">
+                <div class="downloadoptionimage">
+                    <a href="http://hackage.haskell.org/cgi-bin/hackage-scripts/package/{% for package in page.hackage_packages limit:1 %}{{ package.name }}{% endfor %}">
+                        <img width="90" src="http://{{ page.username }}.github.com/images/cabal-cube.png" />
+                    </a>
+                </div>
+                <div class="downloadoptiontext">
+                    <p>Install with <a href="http://haskell.org/haskellwiki/Cabal-Install">Cabal</a>:
+<pre>{% for package in page.hackage_packages %}
+$ cabal install {{ package.name }}{% endfor %}
+</pre></p>
+                </div>
+                <div style="clear: both;"></div> <!-- force the div to clear so downloadoption encompasses the other two divs -->
+            </div>
+            <div class="downloadoption">
+                <div class="downloadoptionimage">
+                    <a href="http://github.com/{{ page.username }}/{{ page.repository }}/zipball/master">
+                        <img width="90" src="http://github.com/images/modules/download/zip.png" />
+                    </a>
+                </div>
+                <div class="downloadoptiontext">
+                    <p>Download this project in either <a href="http://github.com/{{ page.username }}/{{ page.repository }}/zipball/master">
+                       zip</a> or <a href="http://github.com/{{ page.username }}/{{ page.repository }}/tarball/master">tar</a> formats.</p>
+                </div>
+                <div style="clear: both;"></div> <!-- force the div to clear so downloadoption encompasses the other two divs -->
+            </div>
+            <div class="downloadoption">
+                <div class="downloadoptionimage">
+                    <a href="http://github.com/{{ page.username }}/{{ page.repository }}">
+                        <img width="90" src="http://{{ page.username }}.github.com/images/git.png" />
+                    </a>
+                </div>
+                <div class="downloadoptiontext">
+                    <p>Clone the project with <a href="http://git-scm.com">Git</a>:
+                       <pre>$ git clone git://github.com/{{ page.username }}/{{ page.repository }}</pre><br />
+                       Alternatively, browse the source on <a href="http://github.com/{{ page.username }}/{{ page.repository }}">GitHub</a></p>
+                </div>
+                <div style="clear: both;"></div> <!-- force the div to clear so downloadoption encompasses the other two divs -->
+            </div>
+        </div>
+        
+        <h2>Authors</h2>
+        <p>This package is heavily inspired by <a href="http://thread.gmane.org/gmane.comp.lang.haskell.cafe/56499/focus=56521">a thread on Haskell-Cafe</a>.
+           Thanks to Neil Mitchell and Bulat Ziganshin for their contributions in that thread - they form the code that this package is based on.</p>
+        
+        <h2>Contact</h2>
+        <p>All enquiries can be directed to the maintainer ({{ page.author_name }}) <a href="mailto:{{ page.author_email }}">via email</a>.</p>
+    </div>
+</body>
