@@ -1,0 +1,5 @@
+# Cabal temporary stuff
+dist/
+*.o
+*.hi
+

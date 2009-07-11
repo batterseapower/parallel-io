@@ -1,0 +1,53 @@
+Name:               parallel-io
+Version:            0.1
+Cabal-Version:      >= 1.2
+Category:           Concurrency
+Synopsis:           Combinators for executing IO actions in parallel on a thread pool.
+Description:        This package provides combinators for sequencing IO actions onto a thread pool. The
+                    thread pool is guaranteed to contain a fixed number of unblocked threads, minimizing
+                    contention. Furthermore, the parallel combinators can be used re-entrently - your parallel
+                    actions can spawn more parallel actions - without violating this property.
+                    
+                    The package is heavily inspired by the thread <http://thread.gmane.org/gmane.comp.lang.haskell.cafe/56499/focus=56521>.
+                    Thanks to Neil Mitchell and Bulat Ziganshin for the code this package is based on.
+License:            BSD3
+License-File:       LICENSE
+Author:             Neil Mitchell <ndmitchell@gmail.com>,
+                    Bulat Ziganshin <bulat.ziganshin@gmail.com>,
+                    Max Bolingbroke <batterseapower@hotmail.com>
+Maintainer:         Max Bolingbroke <batterseapower@hotmail.com>
+Build-Type:         Simple
+
+
+Flag Benchmark
+    Description:    Build the benchmarking tool
+    Default:        False
+
+
+Library
+    Exposed-Modules:
+        Control.Concurrent.ParallelIO
+    
+    Other-Modules:
+        Control.Concurrent.ParallelIO.Unsafe
+    
+    Build-Depends:  base >= 3 && < 5, extensible-exceptions > 0.1.0.1
+    
+    Ghc-Options:    -Wall
+    
+    Extensions:
+        PatternSignatures
+
+Executable benchmark
+    Main-Is:        Control/Concurrent/ParallelIO/Benchmark.hs
+    
+    if !flag(benchmark)
+        Buildable:  False
+    
+    Build-Depends:  base >= 3 && < 5, extensible-exceptions > 0.1.0.1,
+                    time >= 1
+    
+    Ghc-Options:    -Wall -threaded
+    
+    Extensions:
+        PatternSignatures
