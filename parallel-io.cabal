@@ -7,7 +7,7 @@ Description:        This package provides combinators for sequencing IO actions 
                     thread pool is guaranteed to contain a fixed number of unblocked threads, minimizing
                     contention. Furthermore, the parallel combinators can be used re-entrently - your parallel
                     actions can spawn more parallel actions - without violating this property.
-                    
+                    .
                     The package is heavily inspired by the thread <http://thread.gmane.org/gmane.comp.lang.haskell.cafe/56499/focus=56521>.
                     Thanks to Neil Mitchell and Bulat Ziganshin for the code this package is based on.
 License:            BSD3
