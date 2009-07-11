@@ -25,11 +25,11 @@ stopGlobalPool = stopPool globalPool
 --
 -- Has the following properties:
 -- 1) Never creates more unblocked threads than are specified to live in
---    the pool. NB: this count includes the thread executing parallel_.
+--    the pool. NB: this count includes the thread executing 'parallel_'.
 --    This should minimize contention and hence pre-emption.
 -- 2) On return all actions have been performed.
--- 3) The above properties are true even if parallel_ is used by an
---    action which is itself being executed by parallel_.
+-- 3) The above properties are true even if 'parallel_' is used by an
+--    action which is itself being executed by 'parallel_'.
 parallel_ :: [IO a] -> IO ()
 parallel_ xs | numCapabilities <= 1 = sequence_ xs
 parallel_ [] = return ()
