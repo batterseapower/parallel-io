@@ -27,9 +27,8 @@ Flag Benchmark
 Library
     Exposed-Modules:
         Control.Concurrent.ParallelIO
-    
-    Other-Modules:
-        Control.Concurrent.ParallelIO.Unsafe
+        Control.Concurrent.ParallelIO.Global
+        Control.Concurrent.ParallelIO.Local
     
     Build-Depends:  base >= 3 && < 5, extensible-exceptions > 0.1.0.1
     
