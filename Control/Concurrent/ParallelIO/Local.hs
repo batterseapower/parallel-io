@@ -16,7 +16,7 @@ module Control.Concurrent.ParallelIO.Local (
     withPool, startPool, stopPool,
     enqueueOnPool, spawnPoolWorkerFor,
     
-    parallel_
+    parallel_, parallel
   ) where
 
 import Control.Concurrent
@@ -102,13 +102,17 @@ spawnPoolWorkerFor pool = do
 --
 -- Has the following properties:
 --
---  1. Never creates more unblocked threads than are specified to live in
---     the pool. NB: this count includes the thread executing 'parallel_'.
---     This should minimize contention and hence pre-emption.
+--  1. Never creates more or less unblocked threads than are specified to
+--     live in the pool. NB: this count includes the thread executing 'parallel_'.
+--     This should minimize contention and hence pre-emption, while also preventing
+--     starvation.
 --
 --  2. On return all actions have been performed.
 --
---  3. The above properties are true even if 'parallel_' is used by an
+--  3. The function returns in a timely manner as soon as all actions have
+--     been performed.
+--
+--  4. The above properties are true even if 'parallel_' is used by an
 --     action which is itself being executed by 'parallel_'.
 parallel_ :: Pool -> [IO a] -> IO ()
 parallel_ pool xs | pool_threadcount pool <= 1 = sequence_ xs
@@ -128,6 +132,39 @@ parallel_ pool (x1:xs) = do
     x1
     spawnPoolWorkerFor pool
     takeMVar pause
+
+-- | Run the list of computations in parallel, returning the results in the
+-- same order as the corresponding actions.
+--
+-- Has the following properties:
+--
+--  1. Never creates more or less unblocked threads than are specified to
+--     live in the pool. NB: this count includes the thread executing 'parallel_'.
+--     This should minimize contention and hence pre-emption, while also preventing
+--     starvation.
+--
+--  2. On return all actions have been performed.
+--
+--  3. The function returns in a timely manner as soon as all actions have
+--     been performed.
+--
+--  4. The above properties are true even if 'parallel' is used by an
+--     action which is itself being executed by 'parallel'.
+parallel :: Pool -> [IO a] -> IO [a]
+parallel pool xs | pool_threadcount pool <= 1 = sequence xs
+parallel _    [] = return []
+parallel _    [x] = fmap return x
+parallel pool (x1:xs) = do
+    count <- newMVar $ length xs
+    resultvars <- forM xs $ \x -> do
+        resultvar <- newEmptyMVar
+        enqueueOnPool pool $ do
+            x >>= putMVar resultvar
+            modifyMVar count $ \i -> let i' = i - 1 in return (i', i' == 0)
+        return resultvar
+    result1 <- x1
+    spawnPoolWorkerFor pool
+    fmap (result1:) $ mapM takeMVar resultvars
 
 -- An alternative implementation of parallel_ might:
 --

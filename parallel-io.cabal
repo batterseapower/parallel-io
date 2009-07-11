@@ -24,6 +24,9 @@ Flag Benchmark
     Description:    Build the benchmarking tool
     Default:        False
 
+Flag Tests
+    Description:    Build the test runner
+    Default:        False
 
 Library
     Exposed-Modules:
@@ -43,11 +46,25 @@ Executable benchmark
     
     if !flag(benchmark)
         Buildable:  False
+    else
+        Build-Depends:  base >= 3 && < 5, extensible-exceptions > 0.1.0.1,
+                        time >= 1
     
-    Build-Depends:  base >= 3 && < 5, extensible-exceptions > 0.1.0.1,
-                    time >= 1
+        Ghc-Options:    -Wall -threaded
     
-    Ghc-Options:    -Wall -threaded
+        Extensions:
+            PatternSignatures
+
+Executable tests
+    Main-Is:        Control/Concurrent/ParallelIO/Tests.hs
     
-    Extensions:
-        PatternSignatures
+    if !flag(tests)
+        Buildable:  False
+    else
+        Build-Depends:  base >= 3 && < 5, extensible-exceptions > 0.1.0.1,
+                        test-framework >= 0.1.1, test-framework-quickcheck >= 0.1.1, QuickCheck >= 1.1 && < 2
+    
+        Ghc-Options:    -Wall -threaded -fno-warn-missing-signatures
+    
+        Extensions:
+            PatternSignatures
