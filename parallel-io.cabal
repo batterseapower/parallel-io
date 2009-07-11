@@ -62,7 +62,7 @@ Executable tests
         Buildable:  False
     else
         Build-Depends:  base >= 3 && < 5, extensible-exceptions > 0.1.0.1,
-                        test-framework >= 0.1.1, test-framework-quickcheck >= 0.1.1, QuickCheck >= 1.1 && < 2
+                        test-framework >= 0.1.1, test-framework-hunit >= 0.1.1, HUnit >= 1.2 && < 2
     
         Ghc-Options:    -Wall -threaded -fno-warn-missing-signatures
     

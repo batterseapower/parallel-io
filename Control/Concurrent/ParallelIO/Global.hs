@@ -14,7 +14,7 @@
 module Control.Concurrent.ParallelIO.Global (
     stopGlobalPool,
     
-    parallel_, parallel
+    parallel_, parallel, parallelInterleaved
   ) where
 
 import GHC.Conc
@@ -48,3 +48,10 @@ parallel_ = L.parallel_ globalPool
 -- See also 'L.parallel'.
 parallel :: [IO a] -> IO [a]
 parallel = L.parallel globalPool
+
+-- | Execute the given actions in parallel on the global thread pool,
+-- returning the results in the approximate order of completion.
+--
+-- See also 'L.parallelInterleaved'.
+parallelInterleaved :: [IO a] -> IO [a]
+parallelInterleaved = L.parallelInterleaved globalPool
