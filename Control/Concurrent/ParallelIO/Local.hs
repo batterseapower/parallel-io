@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 -- | Parallelism combinators with explicit thread-pool creation and
 -- passing.
 --
@@ -22,7 +23,6 @@ module Control.Concurrent.ParallelIO.Local (
 import Control.Concurrent
 import Control.Exception.Extensible as E
 import Control.Monad
-import Control.Parallel.Strategies (seqList, r0)
 
 import System.IO
 
@@ -90,7 +90,7 @@ enqueueOnPool pool = writeChan (pool_queue pool)
 -- temporarily blocked.
 spawnPoolWorkerFor :: Pool -> IO ()
 spawnPoolWorkerFor pool = do
-    forkIO $ workerLoop `E.catch` \(e :: E.SomeException) -> do
+    _ <- forkIO $ workerLoop `E.catch` \(e :: E.SomeException) -> do
         hPutStrLn stderr $ "Exception on thread: " ++ show e
         throwTo (pool_spawnedby pool) $ ErrorCall $ "Control.Concurrent.ParallelIO: parallel thread died.\n" ++ show e
     return ()
@@ -126,13 +126,13 @@ parallel_ pool (x1:xs) = do
     pause <- newEmptyMVar
     forM_ xs $ \x ->
         enqueueOnPool pool $ do
-            x
+            _ <- x
             modifyMVar count $ \i -> do
                 let i' = i - 1
                     kill = i' == 0
                 when kill $ putMVar pause ()
                 return (i', kill)
-    x1
+    _ <- x1
     -- NB: it is safe to spawn a worker because at least one will die - the
     -- length of xs must be strictly greater than 0.
     spawnPoolWorkerFor pool
@@ -207,7 +207,12 @@ parallelInterleaved pool (x1:xs) = do
     -- length of xs must be strictly greater than 0.
     spawnPoolWorkerFor pool
     results <- fmap ((result1:) . take thecount) $ getChanContents resultschan
-    seqList r0 results `seq` return results
+    return $ seqList results
+
+seqList :: [a] -> [a]
+seqList []     = []
+seqList (x:xs) = x `seq` xs' `seq` (x:xs')
+  where xs' = seqList xs
 
 -- An alternative implementation of parallel_ might:
 --

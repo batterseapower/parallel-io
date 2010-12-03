@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 module Main where
 
 import Data.IORef
@@ -48,9 +49,9 @@ parallelInterleaved_doesnt_spawn_too_many_threads = doesnt_spawn_too_many_thread
 doesnt_spawn_too_many_threads the_parallel n = do
     threadcountref <- newIORef 0
     maxref <- newIORef 0
-    the_parallel $ replicate n $ do
+    _ <- the_parallel $ replicate n $ do
         tc' <- atomicModifyIORef_ threadcountref (+ 1)
-        atomicModifyIORef_ maxref (`max` tc')
+        _ <- atomicModifyIORef_ maxref (`max` tc')
         -- This delay and 'yield' combination was experimentally determined. The test
         -- can and does still nondeterministically fail with a non-zero probability
         -- dependening on runtime scheduling behaviour. It seems that the first instance
