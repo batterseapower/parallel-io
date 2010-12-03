@@ -15,7 +15,8 @@
 module Control.Concurrent.ParallelIO.Local (
     WorkItem, WorkQueue, Pool,
     withPool, startPool, stopPool,
-    enqueueOnPool, spawnPoolWorkerFor,
+    enqueueOnPool,
+    extraWorkerWhileBlocked, spawnPoolWorkerFor, killPoolWorkerFor,
     
     parallel_, parallel, parallelInterleaved
   ) where
@@ -76,7 +77,7 @@ startPool threadcount = do
 -- Only call this /after/ all users of the pool have completed, or your program may
 -- block indefinitely.
 stopPool :: Pool -> IO ()
-stopPool pool = replicateM_ (pool_threadcount pool - 1) $ enqueueOnPool pool $ return True
+stopPool pool = replicateM_ (pool_threadcount pool - 1) $ killPoolWorkerFor pool
 
 -- | A safe wrapper around 'startPool' and 'stopPool'. Executes an 'IO' action using a newly-created
 -- pool with the specified number of threads and cleans it up at the end.
@@ -87,6 +88,17 @@ withPool threadcount = E.bracket (startPool threadcount) stopPool
 -- | Internal method for scheduling work on a pool.
 enqueueOnPool :: Pool -> WorkItem -> IO ()
 enqueueOnPool pool = CS.insert (pool_queue pool)
+
+-- | Wrap any IO action used from your worker threads that may block with this method:
+-- it temporarily spawns another worker thread to make up for the loss of the old blocked
+-- worker.
+--
+-- This is particularly important if the unblocking is dependent on worker threads actually doing
+-- work. If you have this situation, and you don't use this method to wrap blocking actions, then
+-- you may get a deadlock if all your worker threads get blocked on work that they assume will be
+-- done by other worker threads.
+extraWorkerWhileBlocked :: Pool -> IO () -> IO ()
+extraWorkerWhileBlocked pool wait = E.bracket (spawnPoolWorkerFor pool) (\() -> killPoolWorkerFor pool) (\() -> wait)
 
 -- | Internal method for adding extra unblocked threads to a pool if one is going to be
 -- temporarily blocked.
@@ -101,6 +113,10 @@ spawnPoolWorkerFor pool = do
         workerLoop = do
             kill <- join $ CS.delete (pool_queue pool)
             unless kill workerLoop
+
+-- | Internal method for removing threads from a pool after we become unblocked.
+killPoolWorkerFor :: Pool -> IO ()
+killPoolWorkerFor pool = enqueueOnPool pool $ return True
 
 
 -- | Run the list of computations in parallel.

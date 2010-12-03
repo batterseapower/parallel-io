@@ -12,7 +12,8 @@
 -- This module is implemented on top of that one by maintaining a shared global thread
 -- pool with one thread per capability.
 module Control.Concurrent.ParallelIO.Global (
-    stopGlobalPool,
+    globalPool, stopGlobalPool,
+    extraWorkerWhileBlocked, spawnPoolWorker, killPoolWorker,
     
     parallel_, parallel, parallelInterleaved
   ) where
@@ -35,6 +36,27 @@ globalPool = unsafePerformIO $ L.startPool numCapabilities
 -- See also 'L.stopPool'.
 stopGlobalPool :: IO ()
 stopGlobalPool = L.stopPool globalPool
+
+-- | Wrap any IO action used from your worker threads that may block with this method:
+-- it temporarily spawns another worker thread to make up for the loss of the old blocked
+-- worker.
+--
+-- See also 'L.extraWorkerWhileBlocked'.
+extraWorkerWhileBlocked :: IO () -> IO ()
+extraWorkerWhileBlocked = L.extraWorkerWhileBlocked globalPool
+
+-- | Internal method for adding extra unblocked threads to a pool if one is going to be
+-- temporarily blocked.
+--
+-- See also 'L.spawnPoolWorkerFor'.
+spawnPoolWorker :: IO ()
+spawnPoolWorker = L.spawnPoolWorkerFor globalPool
+
+-- | Internal method for removing threads from a pool after we become unblocked.
+--
+-- See also 'L.killPoolWorkerFor'.
+killPoolWorker :: IO ()
+killPoolWorker = L.killPoolWorkerFor globalPool
 
 -- | Execute the given actions in parallel on the global thread pool.
 --

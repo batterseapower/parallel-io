@@ -1,5 +1,5 @@
 Name:               parallel-io
-Version:            0.2
+Version:            0.2.1
 Cabal-Version:      >= 1.2
 Category:           Concurrency
 Synopsis:           Combinators for executing IO actions in parallel on a thread pool.
@@ -13,9 +13,9 @@ Description:        This package provides combinators for sequencing IO actions 
 License:            BSD3
 License-File:       LICENSE
 Homepage:           http://batterseapower.github.com/parallel-io
-Author:             Neil Mitchell <ndmitchell@gmail.com>,
-                    Bulat Ziganshin <bulat.ziganshin@gmail.com>,
-                    Max Bolingbroke <batterseapower@hotmail.com>
+Author:             Max Bolingbroke <batterseapower@hotmail.com>,
+                    Neil Mitchell <ndmitchell@gmail.com>,
+                    Bulat Ziganshin <bulat.ziganshin@gmail.com>
 Maintainer:         Max Bolingbroke <batterseapower@hotmail.com>
 Build-Type:         Simple
 
@@ -33,6 +33,8 @@ Library
         Control.Concurrent.ParallelIO
         Control.Concurrent.ParallelIO.Global
         Control.Concurrent.ParallelIO.Local
+    Other-Modules:
+        Control.Concurrent.ParallelIO.ConcurrentSet
     
     Build-Depends:  base >= 3 && < 5, extensible-exceptions > 0.1.0.1, containers >= 0.3 && < 0.4, random >= 1.0 && < 1.1
 
