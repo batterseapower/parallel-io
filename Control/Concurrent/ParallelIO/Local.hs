@@ -20,6 +20,8 @@ module Control.Concurrent.ParallelIO.Local (
     parallel_, parallel, parallelInterleaved
   ) where
 
+import qualified Control.Concurrent.ParallelIO.ConcurrentSet as CS
+
 import Control.Concurrent
 import Control.Exception.Extensible as E
 import Control.Monad
@@ -33,7 +35,7 @@ import System.IO
 type WorkItem = IO Bool
 
 -- | A 'WorkQueue' is used to communicate 'WorkItem's to the workers.
-type WorkQueue = Chan WorkItem
+type WorkQueue = CS.ConcurrentSet WorkItem
 
 -- | The type of thread pools used by 'ParallelIO'.
 -- The best way to construct one of these is using 'withPool'.
@@ -54,7 +56,7 @@ data Pool = Pool {
 startPool :: Int -> IO Pool
 startPool threadcount = do
     threadId <- myThreadId
-    queue <- newChan
+    queue <- CS.new
     let pool = Pool {
             pool_threadcount = threadcount,
             pool_spawnedby = threadId,
@@ -74,7 +76,7 @@ startPool threadcount = do
 -- Only call this /after/ all users of the pool have completed, or your program may
 -- block indefinitely.
 stopPool :: Pool -> IO ()
-stopPool pool = replicateM_ (pool_threadcount pool - 1) $ writeChan (pool_queue pool) $ return True
+stopPool pool = replicateM_ (pool_threadcount pool - 1) $ enqueueOnPool pool $ return True
 
 -- | A safe wrapper around 'startPool' and 'stopPool'. Executes an 'IO' action using a newly-created
 -- pool with the specified number of threads and cleans it up at the end.
@@ -84,7 +86,7 @@ withPool threadcount = E.bracket (startPool threadcount) stopPool
 
 -- | Internal method for scheduling work on a pool.
 enqueueOnPool :: Pool -> WorkItem -> IO ()
-enqueueOnPool pool = writeChan (pool_queue pool)
+enqueueOnPool pool = CS.insert (pool_queue pool)
 
 -- | Internal method for adding extra unblocked threads to a pool if one is going to be
 -- temporarily blocked.
@@ -97,7 +99,7 @@ spawnPoolWorkerFor pool = do
     where
         workerLoop :: IO ()
         workerLoop = do
-            kill <- join $ readChan (pool_queue pool)
+            kill <- join $ CS.delete (pool_queue pool)
             unless kill workerLoop
 
 
