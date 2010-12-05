@@ -55,7 +55,9 @@ data Pool = Pool {
 --
 -- A better alternative is to see if you can use the 'withPool' variant.
 startPool :: Int -> IO Pool
-startPool threadcount = do
+startPool threadcount
+  | threadcount < 1 = error $ "startPool: thread count must be strictly positive (was " ++ show threadcount ++ ")"
+  | otherwise = do
     threadId <- myThreadId
     queue <- CS.new
     let pool = Pool {
@@ -137,7 +139,11 @@ killPoolWorkerFor pool = enqueueOnPool pool $ return True
 --     action which is itself being executed by 'parallel_'.
 parallel_ :: Pool -> [IO a] -> IO ()
 parallel_ _    [] = return ()
-parallel_ pool xs | pool_threadcount pool <= 1 = sequence_ xs
+-- It is very important that we *don't* include this special case!
+-- The reason is that even if there is only one worker thread in the pool, one of
+-- the items we process might depend on the ability to use extraWorkerWhileBlocked
+-- to allow processing to continue even before it has finished executing.
+--parallel_ pool xs | pool_threadcount pool <= 1 = sequence_ xs
 parallel_ _    [x] = x >> return ()
 parallel_ pool (x1:xs) = do
     count <- newMVar $ length xs
@@ -175,7 +181,8 @@ parallel_ pool (x1:xs) = do
 --     action which is itself being executed by 'parallel'.
 parallel :: Pool -> [IO a] -> IO [a]
 parallel _    [] = return []
-parallel pool xs | pool_threadcount pool <= 1 = sequence xs
+-- It is important that we do not include this special case (see parallel_ for why)
+--parallel pool xs | pool_threadcount pool <= 1 = sequence xs
 parallel _    [x] = fmap return x
 parallel pool (x1:xs) = do
     count <- newMVar $ length xs

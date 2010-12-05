@@ -12,6 +12,7 @@ import GHC.Conc
 
 import Control.Monad
 
+import Control.Concurrent.MVar
 import qualified Control.Concurrent.ParallelIO.Global as Global
 import Control.Concurrent.ParallelIO.Local
 
@@ -22,12 +23,15 @@ main = do
     Global.stopGlobalPool
 
 tests :: [Test]
-tests = [ testCase "parallel_ executes correct number of actions"       $ repeatTest parallel__execution_count_correct
+tests = [
+          testCase "parallel_ executes correct number of actions"       $ repeatTest parallel__execution_count_correct
         , testCase "parallel_ doesn't spawn too many threads"           $ repeatTest parallel__doesnt_spawn_too_many_threads
         , testCase "parallel executes correct actions"                  $ repeatTest parallel_executes_correct_actions
         , testCase "parallel doesn't spawn too many threads"            $ repeatTest parallel_doesnt_spawn_too_many_threads
         , testCase "parallelInterleaved executes correct actions"       $ repeatTest parallelInterleaved_executes_correct_actions
         , testCase "parallelInterleaved doesn't spawn too many threads" $ repeatTest parallelInterleaved_doesnt_spawn_too_many_threads
+        , testCase "parallel with one worker can be blocked"            $ parallel_with_one_worker_can_be_blocked
+        , testCase "parallel_ with one worker can be blocked"           $ parallel__with_one_worker_can_be_blocked
         ]
 
 parallel__execution_count_correct n = do
@@ -70,6 +74,16 @@ doesnt_spawn_too_many_threads the_parallel n = do
          then return True
          else putStrLn ("Expected at most " ++ show expected_max_concurrent_threads ++ ", got " ++ show seenmax) >> return False
 
+parallel_with_one_worker_can_be_blocked = with_one_worker_can_be_blocked parallel
+parallel__with_one_worker_can_be_blocked = with_one_worker_can_be_blocked parallel_
+
+-- This test is based on a specific bug I observed in the library. The problem was that I was special casing
+-- pools with thread counts <= 1 to just use sequence/sequence_, but that doesn't give the right semantics if
+-- the user is able to call extraWorkerWhileBlocked!
+with_one_worker_can_be_blocked the_parallel = withPool 1 $ \pool -> do
+    wait <- newEmptyMVar
+    the_parallel pool [extraWorkerWhileBlocked pool (takeMVar wait), putMVar wait ()]
+    return ()
 
 atomicModifyIORef_ :: IORef a -> (a -> a) -> IO a
 atomicModifyIORef_ ref f = atomicModifyIORef ref (\x -> let x' = f x in x' `seq` (x', x'))

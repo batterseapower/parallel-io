@@ -1,5 +1,5 @@
 Name:               parallel-io
-Version:            0.2.1
+Version:            0.2.1.1
 Cabal-Version:      >= 1.2
 Category:           Concurrency
 Synopsis:           Combinators for executing IO actions in parallel on a thread pool.
