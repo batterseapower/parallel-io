@@ -99,7 +99,7 @@ enqueueOnPool pool = CS.insert (pool_queue pool)
 -- work. If you have this situation, and you don't use this method to wrap blocking actions, then
 -- you may get a deadlock if all your worker threads get blocked on work that they assume will be
 -- done by other worker threads.
-extraWorkerWhileBlocked :: Pool -> IO () -> IO ()
+extraWorkerWhileBlocked :: Pool -> IO a -> IO a
 extraWorkerWhileBlocked pool wait = E.bracket (spawnPoolWorkerFor pool) (\() -> killPoolWorkerFor pool) (\() -> wait)
 
 -- | Internal method for adding extra unblocked threads to a pool if one is going to be

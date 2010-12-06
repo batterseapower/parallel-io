@@ -42,7 +42,7 @@ stopGlobalPool = L.stopPool globalPool
 -- worker.
 --
 -- See also 'L.extraWorkerWhileBlocked'.
-extraWorkerWhileBlocked :: IO () -> IO ()
+extraWorkerWhileBlocked :: IO a -> IO a
 extraWorkerWhileBlocked = L.extraWorkerWhileBlocked globalPool
 
 -- | Internal method for adding extra unblocked threads to a pool if one is going to be
