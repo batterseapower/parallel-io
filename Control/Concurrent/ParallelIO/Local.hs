@@ -247,7 +247,8 @@ parallel pool (x1:xs) = do
 --     action which is itself being executed by one of the parallel combinators.
 parallelInterleaved :: Pool -> [IO a] -> IO [a]
 parallelInterleaved _    [] = return []
-parallelInterleaved pool xs | pool_threadcount pool <= 1 = sequence xs
+-- It is important that we do not include this special case (see parallel_ for why)
+--parallelInterleaved pool xs | pool_threadcount pool <= 1 = sequence xs
 parallelInterleaved _    [x] = fmap return x
 parallelInterleaved pool (x1:xs) = do
     let thecount = length xs
