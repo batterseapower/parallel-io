@@ -45,6 +45,15 @@ mask io = blocked >>= \b -> if b then io id else block $ io unblock
 #endif
 
 
+-- TODO: I should deal nicely with exceptions raised by the actions on other threads.
+-- Probably I should provide variants of the functions that report exceptions in lieu
+-- of values.
+--
+-- When I introduce this, I want to preserve the current behaviour that causes the
+-- application to die promptly if we are using the unsafe variants of the combinators,
+-- and one of the nested actions dies.
+
+
 -- | Type of work items that are put onto the queue internally. The 'Bool'
 -- returned from the 'IO' action specifies whether the invoking
 -- thread should terminate itself immediately.
@@ -167,6 +176,9 @@ killPoolWorkerFor pool = enqueueOnPool pool $ return True
 --
 --  4. The above properties are true even if 'parallel_' is used by an
 --     action which is itself being executed by one of the parallel combinators.
+--
+-- If any of the IO actions throws an exception, undefined behaviour will result.
+-- If you want safety, wrap your actions in 'Control.Exception.try'.
 parallel_ :: Pool -> [IO a] -> IO ()
 parallel_ _    [] = return ()
 -- It is very important that we *don't* include this special case!
@@ -209,6 +221,9 @@ parallel_ pool (x1:xs) = mask $ \restore -> do
 --
 --  4. The above properties are true even if 'parallel' is used by an
 --     action which is itself being executed by one of the parallel combinators.
+--
+-- If any of the IO actions throws an exception, undefined behaviour will result.
+-- If you want safety, wrap your actions in 'Control.Exception.try'.
 parallel :: Pool -> [IO a] -> IO [a]
 parallel _    [] = return []
 -- It is important that we do not include this special case (see parallel_ for why)
@@ -245,6 +260,9 @@ parallel pool (x1:xs) = mask $ \restore -> do
 --
 --  3. The above properties are true even if 'parallelInterleaved' is used by an
 --     action which is itself being executed by one of the parallel combinators.
+--
+-- If any of the IO actions throws an exception, undefined behaviour will result.
+-- If you want safety, wrap your actions in 'Control.Exception.try'.
 parallelInterleaved :: Pool -> [IO a] -> IO [a]
 parallelInterleaved _    [] = return []
 -- It is important that we do not include this special case (see parallel_ for why)
