@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE CPP, ScopedTypeVariables #-}
 -- | Parallelism combinators with explicit thread-pool creation and
 -- passing.
 --
@@ -33,6 +33,16 @@ import Control.Exception.Extensible as E
 import Control.Monad
 
 import System.IO
+
+
+#if MIN_VERSION_base(4,3,0)
+import Control.Exception ( mask )
+#else
+import Control.Exception ( blocked, block, unblock )
+
+mask :: ((IO a -> IO a) -> IO b) -> IO b
+mask io = blocked >>= \b -> if b then io id else block $ io unblock
+#endif
 
 
 -- | Type of work items that are put onto the queue internally. The 'Bool'
@@ -124,7 +134,7 @@ extraWorkerWhileBlocked pool wait = E.bracket (spawnPoolWorkerFor pool) (\() -> 
 -- so we reccomend that you use the 'extraWorkerWhileBlocked' function instead if possible.
 spawnPoolWorkerFor :: Pool -> IO ()
 spawnPoolWorkerFor pool = do
-    _ <- forkIO $ workerLoop `E.catch` \(e :: E.SomeException) -> do
+    _ <- mask $ \restore -> forkIO $ restore workerLoop `E.catch` \(e :: E.SomeException) -> do
         hPutStrLn stderr $ "Exception on thread: " ++ show e
         throwTo (pool_spawnedby pool) $ ErrorCall $ "Control.Concurrent.ParallelIO: parallel thread died.\n" ++ show e
     return ()
