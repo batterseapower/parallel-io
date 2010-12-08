@@ -175,18 +175,18 @@ parallel_ _    [] = return ()
 -- to allow processing to continue even before it has finished executing.
 --parallel_ pool xs | pool_threadcount pool <= 1 = sequence_ xs
 parallel_ _    [x] = x >> return ()
-parallel_ pool (x1:xs) = do
+parallel_ pool (x1:xs) = mask $ \restore -> do
     count <- newMVar $ length xs
     pause <- newEmptyMVar
     forM_ xs $ \x ->
         enqueueOnPool pool $ do
-            _ <- x
+            _ <- restore x
             modifyMVar count $ \i -> do
                 let i' = i - 1
                     kill = i' == 0
                 when kill $ putMVar pause ()
                 return (i', kill)
-    _ <- x1
+    _ <- restore x1
     -- NB: it is safe to spawn a worker because at least one will die - the
     -- length of xs must be strictly greater than 0.
     spawnPoolWorkerFor pool
@@ -214,15 +214,15 @@ parallel _    [] = return []
 -- It is important that we do not include this special case (see parallel_ for why)
 --parallel pool xs | pool_threadcount pool <= 1 = sequence xs
 parallel _    [x] = fmap return x
-parallel pool (x1:xs) = do
+parallel pool (x1:xs) = mask $ \restore -> do
     count <- newMVar $ length xs
     resultvars <- forM xs $ \x -> do
         resultvar <- newEmptyMVar
         enqueueOnPool pool $ do
-            x >>= putMVar resultvar
+            restore x >>= putMVar resultvar
             modifyMVar count $ \i -> let i' = i - 1 in return (i', i' == 0)
         return resultvar
-    result1 <- x1
+    result1 <- restore x1
     -- NB: it is safe to spawn a worker because at least one will die - the
     -- length of xs must be strictly greater than 0.
     spawnPoolWorkerFor pool
@@ -250,15 +250,15 @@ parallelInterleaved _    [] = return []
 -- It is important that we do not include this special case (see parallel_ for why)
 --parallelInterleaved pool xs | pool_threadcount pool <= 1 = sequence xs
 parallelInterleaved _    [x] = fmap return x
-parallelInterleaved pool (x1:xs) = do
+parallelInterleaved pool (x1:xs) = mask $ \restore -> do
     let thecount = length xs
     count <- newMVar $ thecount
     resultschan <- newChan
     forM_ xs $ \x -> do
         enqueueOnPool pool $ do
-            x >>= writeChan resultschan
+            restore x >>= writeChan resultschan
             modifyMVar count $ \i -> let i' = i - 1 in return (i', i' == 0)
-    result1 <- x1
+    result1 <- restore x1
     -- NB: it is safe to spawn a worker because at least one will die - the
     -- length of xs must be strictly greater than 0.
     spawnPoolWorkerFor pool
