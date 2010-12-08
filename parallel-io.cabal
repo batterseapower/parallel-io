@@ -1,12 +1,14 @@
 Name:               parallel-io
-Version:            0.2.2
+Version:            0.3.0
 Cabal-Version:      >= 1.2
 Category:           Concurrency
 Synopsis:           Combinators for executing IO actions in parallel on a thread pool.
 Description:        This package provides combinators for sequencing IO actions onto a thread pool. The
-                    thread pool is guaranteed to contain a fixed number of unblocked threads, minimizing
-                    contention. Furthermore, the parallel combinators can be used re-entrently - your parallel
-                    actions can spawn more parallel actions - without violating this property.
+                    thread pool is guaranteed to contain no more unblocked threads than a user-specified upper limit, thus
+                    minimizing contention.
+                    .
+                    Furthermore, the parallel combinators can be used reentrantly - your parallel
+                    actions can spawn more parallel actions - without violating this property of the thread pool.
                     .
                     The package is heavily inspired by the thread <http://thread.gmane.org/gmane.comp.lang.haskell.cafe/56499/focus=56521>.
                     Thanks to Neil Mitchell and Bulat Ziganshin for the code this package is based on.

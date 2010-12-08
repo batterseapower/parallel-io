@@ -7,15 +7,22 @@
 -- Make sure that you compile with @-threaded@ and supply @+RTS -N2 -RTS@
 -- to  the generated Haskell executable, or you won't get any parallelism.
 --
+-- If you plan to allow your worker items to block, then you should read the documentation for 'extraWorkerWhileBlocked'.
+--
 -- The "Control.Concurrent.ParallelIO.Local" module provides a more general
 -- interface which allows explicit passing of pools and control of their size.
 -- This module is implemented on top of that one by maintaining a shared global thread
 -- pool with one thread per capability.
 module Control.Concurrent.ParallelIO.Global (
+    -- * Executing actions
+    parallel_, parallel, parallelInterleaved,
+
+    -- * Global pool management
     globalPool, stopGlobalPool,
-    extraWorkerWhileBlocked, spawnPoolWorker, killPoolWorker,
+    extraWorkerWhileBlocked,
     
-    parallel_, parallel, parallelInterleaved
+    -- * Advanced global pool management
+    spawnPoolWorker, killPoolWorker
   ) where
 
 import GHC.Conc
@@ -24,7 +31,9 @@ import System.IO.Unsafe
 
 import qualified Control.Concurrent.ParallelIO.Local as L
 
-
+-- | The global thread pool. Contains as many threads as there are capabilities.
+--
+-- Users of the global pool must call 'stopGlobalPool' from the main thread at the end of their program.
 {-# NOINLINE globalPool #-}
 globalPool :: L.Pool
 globalPool = unsafePerformIO $ L.startPool numCapabilities
@@ -36,6 +45,7 @@ globalPool = unsafePerformIO $ L.startPool numCapabilities
 -- See also 'L.stopPool'.
 stopGlobalPool :: IO ()
 stopGlobalPool = L.stopPool globalPool
+ -- TODO: could I lift the requirement to call this function with a touchPool function after the parallel combinators?
 
 -- | Wrap any IO action used from your worker threads that may block with this method:
 -- it temporarily spawns another worker thread to make up for the loss of the old blocked
@@ -45,20 +55,25 @@ stopGlobalPool = L.stopPool globalPool
 extraWorkerWhileBlocked :: IO a -> IO a
 extraWorkerWhileBlocked = L.extraWorkerWhileBlocked globalPool
 
--- | Internal method for adding extra unblocked threads to a pool if one is going to be
--- temporarily blocked.
+-- | Internal method for adding extra unblocked threads to a pool if one of the current
+-- worker threads is going to be temporarily blocked. Unrestricted use of this is unsafe,
+-- so we reccomend that you use the 'extraWorkerWhileBlocked' function instead if possible.
 --
 -- See also 'L.spawnPoolWorkerFor'.
 spawnPoolWorker :: IO ()
 spawnPoolWorker = L.spawnPoolWorkerFor globalPool
 
--- | Internal method for removing threads from a pool after we become unblocked.
+-- | Internal method for removing threads from a pool after one of the threads on the pool
+-- becomes newly unblocked. Unrestricted use of this is unsafe, so we reccomend that you use
+-- the 'extraWorkerWhileBlocked' function instead if possible.
 --
 -- See also 'L.killPoolWorkerFor'.
 killPoolWorker :: IO ()
 killPoolWorker = L.killPoolWorkerFor globalPool
 
 -- | Execute the given actions in parallel on the global thread pool.
+--
+-- Users of the global pool must call 'stopGlobalPool' from the main thread at the end of their program.
 --
 -- See also 'L.parallel_'.
 parallel_ :: [IO a] -> IO ()
@@ -67,12 +82,16 @@ parallel_ = L.parallel_ globalPool
 -- | Execute the given actions in parallel on the global thread pool,
 -- returning the results in the same order as the corresponding actions.
 --
+-- Users of the global pool must call 'stopGlobalPool' from the main thread at the end of their program.
+--
 -- See also 'L.parallel'.
 parallel :: [IO a] -> IO [a]
 parallel = L.parallel globalPool
 
 -- | Execute the given actions in parallel on the global thread pool,
 -- returning the results in the approximate order of completion.
+--
+-- Users of the global pool must call 'stopGlobalPool' from the main thread at the end of their program.
 --
 -- See also 'L.parallelInterleaved'.
 parallelInterleaved :: [IO a] -> IO [a]

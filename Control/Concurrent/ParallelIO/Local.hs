@@ -9,16 +9,21 @@
 -- Make sure that you compile with @-threaded@ and supply @+RTS -N2 -RTS@
 -- to  the generated Haskell executable, or you won't get any parallelism.
 --
+-- If you plan to allow your worker items to block, then you should read the documentation for 'extraWorkerWhileBlocked'.
+--
 -- The "Control.Concurrent.ParallelIO.Global" module is implemented
 -- on top of this one by maintaining a shared global thread pool
 -- with one thread per capability.
 module Control.Concurrent.ParallelIO.Local (
-    WorkItem, WorkQueue, Pool,
-    withPool, startPool, stopPool,
-    enqueueOnPool,
-    extraWorkerWhileBlocked, spawnPoolWorkerFor, killPoolWorkerFor,
+    -- * Executing actions
+    parallel_, parallel, parallelInterleaved,
+
+    -- * Pool management
+    Pool, withPool, startPool, stopPool,
+    extraWorkerWhileBlocked,
     
-    parallel_, parallel, parallelInterleaved
+    -- * Advanced pool management
+    spawnPoolWorkerFor, killPoolWorkerFor
   ) where
 
 import qualified Control.Concurrent.ParallelIO.ConcurrentSet as CS
@@ -30,7 +35,7 @@ import Control.Monad
 import System.IO
 
 
--- | Type of work items you can put onto the queue. The 'Bool'
+-- | Type of work items that are put onto the queue internally. The 'Bool'
 -- returned from the 'IO' action specifies whether the invoking
 -- thread should terminate itself immediately.
 type WorkItem = IO Bool
@@ -38,8 +43,8 @@ type WorkItem = IO Bool
 -- | A 'WorkQueue' is used to communicate 'WorkItem's to the workers.
 type WorkQueue = CS.ConcurrentSet WorkItem
 
--- | The type of thread pools used by 'ParallelIO'.
--- The best way to construct one of these is using 'withPool'.
+-- | A thread pool, containing a maximum number of threads. The best way to
+-- construct one of these is using 'withPool'.
 data Pool = Pool {
     pool_threadcount :: Int,
     pool_spawnedby :: ThreadId,
@@ -69,9 +74,8 @@ startPool threadcount
     replicateM_ (threadcount - 1) (spawnPoolWorkerFor pool)
     return pool
 
--- | Clean up a thread pool. If you don't call this then no one holds the queue,
--- the queue gets GC'd, the threads find themselves blocked indefinitely, and you get
--- exceptions.
+-- | Clean up a thread pool. If you don't call this from the main thread then no one holds the queue,
+-- the queue gets GC'd, the threads find themselves blocked indefinitely, and you get exceptions.
 -- 
 -- This cleanly shuts down the threads so the queue isn't important and you don't get
 -- exceptions.
@@ -91,19 +95,33 @@ withPool threadcount = E.bracket (startPool threadcount) stopPool
 enqueueOnPool :: Pool -> WorkItem -> IO ()
 enqueueOnPool pool = CS.insert (pool_queue pool)
 
--- | Wrap any IO action used from your worker threads that may block with this method:
--- it temporarily spawns another worker thread to make up for the loss of the old blocked
+-- | You should wrap any IO action used from your worker threads that may block with this method.
+-- It temporarily spawns another worker thread to make up for the loss of the old blocked
 -- worker.
 --
 -- This is particularly important if the unblocking is dependent on worker threads actually doing
 -- work. If you have this situation, and you don't use this method to wrap blocking actions, then
 -- you may get a deadlock if all your worker threads get blocked on work that they assume will be
 -- done by other worker threads.
+--
+-- An example where something goes wrong if you don't use this to wrap blocking actions is the following example:
+--
+-- > newEmptyMVar >>= \mvar -> parallel_ pool [readMVar mvar, putMVar mvar ()]
+--
+-- If we only have one thread, we will sometimes get a schedule where the 'readMVar' action is run
+-- before the 'putMVar'. Unless we wrap the read with 'extraWorkerWhileBlocked', if the pool has a
+-- single thread our program to deadlock, because the worker will become blocked and no other thread
+-- will be available to execute the 'putMVar'.
+--
+-- The correct code is:
+--
+-- > newEmptyMVar >>= \mvar -> parallel_ pool [extraWorkerWhileBlocked pool (readMVar mvar), putMVar mvar ()]
 extraWorkerWhileBlocked :: Pool -> IO a -> IO a
 extraWorkerWhileBlocked pool wait = E.bracket (spawnPoolWorkerFor pool) (\() -> killPoolWorkerFor pool) (\() -> wait)
 
--- | Internal method for adding extra unblocked threads to a pool if one is going to be
--- temporarily blocked.
+-- | Internal method for adding extra unblocked threads to a pool if one of the current
+-- worker threads is going to be temporarily blocked. Unrestricted use of this is unsafe,
+-- so we reccomend that you use the 'extraWorkerWhileBlocked' function instead if possible.
 spawnPoolWorkerFor :: Pool -> IO ()
 spawnPoolWorkerFor pool = do
     _ <- forkIO $ workerLoop `E.catch` \(e :: E.SomeException) -> do
@@ -116,7 +134,9 @@ spawnPoolWorkerFor pool = do
             kill <- join $ CS.delete (pool_queue pool)
             unless kill workerLoop
 
--- | Internal method for removing threads from a pool after we become unblocked.
+-- | Internal method for removing threads from a pool after one of the threads on the pool
+-- becomes newly unblocked. Unrestricted use of this is unsafe, so we reccomend that you use
+-- the 'extraWorkerWhileBlocked' function instead if possible.
 killPoolWorkerFor :: Pool -> IO ()
 killPoolWorkerFor pool = enqueueOnPool pool $ return True
 
@@ -136,7 +156,7 @@ killPoolWorkerFor pool = enqueueOnPool pool $ return True
 --     been performed.
 --
 --  4. The above properties are true even if 'parallel_' is used by an
---     action which is itself being executed by 'parallel_'.
+--     action which is itself being executed by one of the parallel combinators.
 parallel_ :: Pool -> [IO a] -> IO ()
 parallel_ _    [] = return ()
 -- It is very important that we *don't* include this special case!
@@ -168,7 +188,7 @@ parallel_ pool (x1:xs) = do
 -- Has the following properties:
 --
 --  1. Never creates more or less unblocked threads than are specified to
---     live in the pool. NB: this count includes the thread executing 'parallel_'.
+--     live in the pool. NB: this count includes the thread executing 'parallel'.
 --     This should minimize contention and hence pre-emption, while also preventing
 --     starvation.
 --
@@ -178,7 +198,7 @@ parallel_ pool (x1:xs) = do
 --     been performed.
 --
 --  4. The above properties are true even if 'parallel' is used by an
---     action which is itself being executed by 'parallel'.
+--     action which is itself being executed by one of the parallel combinators.
 parallel :: Pool -> [IO a] -> IO [a]
 parallel _    [] = return []
 -- It is important that we do not include this special case (see parallel_ for why)
@@ -204,7 +224,7 @@ parallel pool (x1:xs) = do
 -- Has the following properties:
 --
 --  1. Never creates more or less unblocked threads than are specified to
---     live in the pool. NB: this count includes the thread executing 'parallel_'.
+--     live in the pool. NB: this count includes the thread executing 'parallelInterleaved'.
 --     This should minimize contention and hence pre-emption, while also preventing
 --     starvation.
 --
@@ -214,7 +234,7 @@ parallel pool (x1:xs) = do
 --     is likely to be very similar to the order of completion.
 --
 --  3. The above properties are true even if 'parallelInterleaved' is used by an
---     action which is itself being executed by 'parallelInterleaved'.
+--     action which is itself being executed by one of the parallel combinators.
 parallelInterleaved :: Pool -> [IO a] -> IO [a]
 parallelInterleaved _    [] = return []
 parallelInterleaved pool xs | pool_threadcount pool <= 1 = sequence xs
