@@ -156,8 +156,10 @@ spawnPoolWorkerFor pool = {- putStrLn "spawnPoolWorkerFor" >> -} do
         workerLoop :: IO ()
         workerLoop = do
             --tid <- myThreadId
-            --hPutStrLn stderr $ "Worker loop on: " ++ show tid
-            kill <- join $ CC.delete (pool_queue pool)
+            --hPutStrLn stderr $ "[waiting] " ++ show tid
+            work_item <- CC.delete (pool_queue pool)
+            --hPutStrLn stderr $ "[working] " ++ show tid
+            kill <- work_item
             unless kill workerLoop
 
 -- | Internal method for removing threads from a pool after one of the threads on the pool
