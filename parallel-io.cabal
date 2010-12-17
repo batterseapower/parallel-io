@@ -26,6 +26,10 @@ Flag Benchmark
     Description:    Build the benchmarking tool
     Default:        False
 
+Flag Fuzz
+    Description:    Build the fuzzing tool for discovering deadlocks
+    Default:        False
+
 Flag Tests
     Description:    Build the test runner
     Default:        False
@@ -60,4 +64,15 @@ Executable tests
         Build-Depends:  base >= 4 && < 5, extensible-exceptions > 0.1.0.1, containers >= 0.2 && < 0.4, random >= 1.0 && < 1.1,
                         test-framework >= 0.1.1, test-framework-hunit >= 0.1.1, HUnit >= 1.2 && < 2
     
+        Ghc-Options:    -threaded
+
+Executable fuzz
+    Main-Is:        Control/Concurrent/ParallelIO/Fuzz.hs
+
+    if !flag(fuzz)
+        Buildable:  False
+    else
+        Build-Depends:  base >= 4 && < 5, extensible-exceptions > 0.1.0.1, containers >= 0.2 && < 0.4, random >= 1.0 && < 1.1,
+                        test-framework >= 0.1.1, test-framework-hunit >= 0.1.1, HUnit >= 1.2 && < 2
+
         Ghc-Options:    -threaded
