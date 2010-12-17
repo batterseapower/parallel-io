@@ -40,7 +40,7 @@ Library
         Control.Concurrent.ParallelIO.Global
         Control.Concurrent.ParallelIO.Local
     Other-Modules:
-        Control.Concurrent.ParallelIO.ConcurrentSet
+        Control.Concurrent.ParallelIO.ConcurrentCollection
     
     Build-Depends:  base >= 4 && < 5, extensible-exceptions > 0.1.0.1, containers >= 0.2 && < 0.5, random >= 1.0 && < 1.1
 

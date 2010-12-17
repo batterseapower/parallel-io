@@ -26,7 +26,7 @@ module Control.Concurrent.ParallelIO.Local (
     spawnPoolWorkerFor, killPoolWorkerFor
   ) where
 
-import qualified Control.Concurrent.ParallelIO.ConcurrentSet as CS
+import qualified Control.Concurrent.ParallelIO.ConcurrentCollection as CC
 
 import Control.Concurrent
 import Control.Exception.Extensible as E
@@ -60,7 +60,11 @@ mask io = blocked >>= \b -> if b then io id else block $ io unblock
 type WorkItem = IO Bool
 
 -- | A 'WorkQueue' is used to communicate 'WorkItem's to the workers.
-type WorkQueue = CS.ConcurrentSet WorkItem
+type WorkQueue = CC.Chan WorkItem
+
+-- FIXME: I saw deadlocks very quickly with the fuzzer using ConcurrentSet.
+-- Is ConcurrentSet incorrect, or was it exposing a bug here?
+--type WorkQueue = CC.ConcurrentSet WorkItem
 
 -- | A thread pool, containing a maximum number of threads. The best way to
 -- construct one of these is using 'withPool'.
@@ -83,7 +87,7 @@ startPool threadcount
   | threadcount < 1 = error $ "startPool: thread count must be strictly positive (was " ++ show threadcount ++ ")"
   | otherwise = do
     threadId <- myThreadId
-    queue <- CS.new
+    queue <- CC.new
     let pool = Pool {
             pool_threadcount = threadcount,
             pool_spawnedby = threadId,
@@ -112,7 +116,7 @@ withPool threadcount = E.bracket (startPool threadcount) stopPool
 
 -- | Internal method for scheduling work on a pool.
 enqueueOnPool :: Pool -> WorkItem -> IO ()
-enqueueOnPool pool = CS.insert (pool_queue pool)
+enqueueOnPool pool = CC.insert (pool_queue pool)
 
 -- | You should wrap any IO action used from your worker threads that may block with this method.
 -- It temporarily spawns another worker thread to make up for the loss of the old blocked
@@ -142,22 +146,25 @@ extraWorkerWhileBlocked pool wait = E.bracket (spawnPoolWorkerFor pool) (\() -> 
 -- worker threads is going to be temporarily blocked. Unrestricted use of this is unsafe,
 -- so we reccomend that you use the 'extraWorkerWhileBlocked' function instead if possible.
 spawnPoolWorkerFor :: Pool -> IO ()
-spawnPoolWorkerFor pool = do
+spawnPoolWorkerFor pool = {- putStrLn "spawnPoolWorkerFor" >> -} do
     _ <- mask $ \restore -> forkIO $ restore workerLoop `E.catch` \(e :: E.SomeException) -> do
-        hPutStrLn stderr $ "Exception on thread: " ++ show e
+        tid <- myThreadId
+        hPutStrLn stderr $ "Exception on " ++ show tid ++ ": " ++ show e
         throwTo (pool_spawnedby pool) $ ErrorCall $ "Control.Concurrent.ParallelIO: parallel thread died.\n" ++ show e
     return ()
     where
         workerLoop :: IO ()
         workerLoop = do
-            kill <- join $ CS.delete (pool_queue pool)
+            --tid <- myThreadId
+            --hPutStrLn stderr $ "Worker loop on: " ++ show tid
+            kill <- join $ CC.delete (pool_queue pool)
             unless kill workerLoop
 
 -- | Internal method for removing threads from a pool after one of the threads on the pool
 -- becomes newly unblocked. Unrestricted use of this is unsafe, so we reccomend that you use
 -- the 'extraWorkerWhileBlocked' function instead if possible.
 killPoolWorkerFor :: Pool -> IO ()
-killPoolWorkerFor pool = enqueueOnPool pool $ return True
+killPoolWorkerFor pool = {- putStrLn "killPoolWorkerFor" >> -} enqueueOnPool pool (return True)
 
 
 -- | Run the list of computations in parallel.
@@ -196,7 +203,7 @@ parallel_ pool (x1:xs) = mask $ \restore -> do
             modifyMVar count $ \i -> do
                 let i' = i - 1
                     kill = i' == 0
-                when kill $ putMVar pause ()
+                when kill $ {- putStrLn "Natural death" >> -} putMVar pause ()
                 return (i', kill)
     _ <- restore x1
     -- NB: it is safe to spawn a worker because at least one will die - the
