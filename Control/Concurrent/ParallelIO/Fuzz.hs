@@ -50,7 +50,10 @@ fuzz pool = do
         should_spawn <- fmap (<= sPAWN_PERCENTAGE) $ randomRIO (1, 100)
         nested_tid <- myThreadId
         
-        putStrLn $ show tid ++ ":\trunning " ++ show i ++ if should_spawn then " (recursing)" else ""
+        putStrLn $ show nested_tid ++ ":\trunning " ++ show i ++ if should_spawn then " (recursing)" else ""
         
         randomRIO dELAY_RANGE >>= threadDelay
+        
+        putStrLn $ show nested_tid ++ ":\twoke up"
+        
         when should_spawn $ fuzz pool
