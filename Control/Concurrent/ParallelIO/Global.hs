@@ -15,7 +15,7 @@
 -- pool with one thread per capability.
 module Control.Concurrent.ParallelIO.Global (
     -- * Executing actions
-    parallel_, parallel, parallelInterleaved,
+    parallel_, parallelE_, parallel, parallelE, parallelInterleaved, parallelInterleavedE,
 
     -- * Global pool management
     globalPool, stopGlobalPool,
@@ -26,6 +26,8 @@ module Control.Concurrent.ParallelIO.Global (
   ) where
 
 import GHC.Conc
+
+import Control.Exception
 
 import System.IO.Unsafe
 
@@ -79,6 +81,14 @@ killPoolWorker = L.killPoolWorkerFor globalPool
 parallel_ :: [IO a] -> IO ()
 parallel_ = L.parallel_ globalPool
 
+-- | Execute the given actions in parallel on the global thread pool, reporting exceptions explicitly.
+--
+-- Users of the global pool must call 'stopGlobalPool' from the main thread at the end of their program.
+--
+-- See also 'L.parallelE_'.
+parallelE_ :: [IO a] -> IO [Maybe SomeException]
+parallelE_ = L.parallelE_ globalPool
+
 -- | Execute the given actions in parallel on the global thread pool,
 -- returning the results in the same order as the corresponding actions.
 --
@@ -89,6 +99,15 @@ parallel :: [IO a] -> IO [a]
 parallel = L.parallel globalPool
 
 -- | Execute the given actions in parallel on the global thread pool,
+-- returning the results in the same order as the corresponding actions and reporting exceptions explicitly.
+--
+-- Users of the global pool must call 'stopGlobalPool' from the main thread at the end of their program.
+--
+-- See also 'L.parallelE'.
+parallelE :: [IO a] -> IO [Either SomeException a]
+parallelE = L.parallelE globalPool
+
+-- | Execute the given actions in parallel on the global thread pool,
 -- returning the results in the approximate order of completion.
 --
 -- Users of the global pool must call 'stopGlobalPool' from the main thread at the end of their program.
@@ -96,3 +115,12 @@ parallel = L.parallel globalPool
 -- See also 'L.parallelInterleaved'.
 parallelInterleaved :: [IO a] -> IO [a]
 parallelInterleaved = L.parallelInterleaved globalPool
+
+-- | Execute the given actions in parallel on the global thread pool,
+-- returning the results in the approximate order of completion and reporting exceptions explicitly.
+--
+-- Users of the global pool must call 'stopGlobalPool' from the main thread at the end of their program.
+--
+-- See also 'L.parallelInterleavedE'.
+parallelInterleavedE :: [IO a] -> IO [Either SomeException a]
+parallelInterleavedE = L.parallelInterleavedE globalPool
