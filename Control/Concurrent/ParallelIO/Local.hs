@@ -59,9 +59,6 @@ type WorkItem = IO Bool
 
 -- | A 'WorkQueue' is used to communicate 'WorkItem's to the workers.
 --type WorkQueue = CC.Chan WorkItem
-
--- FIXME: I saw deadlocks very quickly with the fuzzer using ConcurrentSet.
--- Is ConcurrentSet incorrect, or was it exposing a bug here?
 type WorkQueue = CC.ConcurrentSet WorkItem
 
 -- | A thread pool, containing a maximum number of threads. The best way to
