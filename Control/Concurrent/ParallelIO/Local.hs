@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 -- | Parallelism combinators with explicit thread-pool creation and
 -- passing.
 --
@@ -26,6 +26,7 @@ module Control.Concurrent.ParallelIO.Local (
     spawnPoolWorkerFor, killPoolWorkerFor
   ) where
 
+import Control.Concurrent.ParallelIO.Compat
 import qualified Control.Concurrent.ParallelIO.ConcurrentCollection as CC
 
 import Control.Concurrent
@@ -33,16 +34,6 @@ import Control.Exception.Extensible as E
 import Control.Monad
 
 import System.IO
-
-
-#if MIN_VERSION_base(4,3,0)
-import Control.Exception ( mask )
-#else
-import Control.Exception ( blocked, block, unblock )
-
-mask :: ((IO a -> IO a) -> IO b) -> IO b
-mask io = blocked >>= \b -> if b then io id else block $ io unblock
-#endif
 
 
 -- TODO: I should deal nicely with exceptions raised by the actions on other threads.

@@ -39,7 +39,8 @@ Library
         Control.Concurrent.ParallelIO
         Control.Concurrent.ParallelIO.Global
         Control.Concurrent.ParallelIO.Local
-    Other-Modules:
+    Other-Modules:    
+        Control.Concurrent.ParallelIO.Compat
         Control.Concurrent.ParallelIO.ConcurrentCollection
     
     Build-Depends:  base >= 4 && < 5, extensible-exceptions > 0.1.0.1, containers >= 0.2 && < 0.5, random >= 1.0 && < 1.1
@@ -75,3 +76,11 @@ Executable fuzz
         Build-Depends:  base >= 4 && < 5, extensible-exceptions > 0.1.0.1, containers >= 0.2 && < 0.5, random >= 1.0 && < 1.1
 
         Ghc-Options:    -threaded
+
+Executable fuzz-seq
+    Main-Is:        Control/Concurrent/ParallelIO/Fuzz.hs
+
+    if !flag(fuzz)
+        Buildable:  False
+    else
+        Build-Depends:  base >= 4 && < 5, extensible-exceptions > 0.1.0.1, containers >= 0.2 && < 0.5, random >= 1.0 && < 1.1

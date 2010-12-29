@@ -2,6 +2,8 @@ module Control.Concurrent.ParallelIO.ConcurrentCollection (
     ConcurrentSet, Chan, ConcurrentCollection(..)
   ) where
 
+import Control.Concurrent.ParallelIO.Compat
+
 import Control.Concurrent.MVar
 import Control.Concurrent.Chan
 import Control.Monad
@@ -32,44 +34,60 @@ class ConcurrentCollection p where
 --      machine resources (i.e. CPU or RAM) tend to be next to each other in the list.
 --      Thus, reducing access locality means that we tend to choose tasks that require
 --      different resources.
-data ConcurrentSet a = CS (MVar (StdGen, Either (MVar ()) (IM.IntMap a)))
+data ConcurrentSet a = CS (MVar (StdGen, Contents (IM.IntMap a)))
+
+data Contents a = EmptyWithWaiters (MVar ())
+                | NonEmpty a
 
 instance ConcurrentCollection ConcurrentSet where
-    new = fmap CS $ liftM2 (\gen mvar -> (gen, Left mvar)) newStdGen newEmptyMVar >>= newMVar
+    new = fmap CS $ liftM2 (\gen mvar -> (gen, EmptyWithWaiters mvar)) newStdGen newEmptyMVar >>= newMVar
 
+    -- We don't mask asynchronous exceptions here because it's OK if we signal the wait_mvar
+    -- but the set still doesn't contain anything: the readers (i.e. in "delete") will just
+    -- discover that and start waiting again, just as if another thread had deleted before
+    -- they got a chance to read from a newly non-empty set
     insert (CS set_mvar) x = modifyMVar_ set_mvar go
-      where go (gen, ei_mvar_ys) = do
+      where go (gen, contents) = do
                 let (i, gen') = random gen
-                case ei_mvar_ys of
-                  Left wait_mvar -> do
+                case contents of
+                  EmptyWithWaiters wait_mvar -> do
                     -- Wake up all waiters (if any): any one of them may want this item
-                    putMVar wait_mvar ()
-                    return (gen', Right (IM.singleton i x))
-                  Right ys -> return (gen', Right (IM.insert i x ys))
+                    --
+                    -- NB: we don't use putMvar here (even though it would be safe) because
+                    -- this way I get an obvious exception if I've done something daft.
+                    True <- tryPutMVar wait_mvar ()
+                    return (gen', NonEmpty (IM.singleton i x))
+                  NonEmpty ys -> return (gen', NonEmpty (IM.insert i x ys))
 
     delete (CS set_mvar) = loop
       where
         loop = do
-            ei_wait_x <- modifyMVar set_mvar go
-            case ei_wait_x of
-                Left wait_mvar -> do
+            contents <- modifyMVar set_mvar peek_inside
+            case contents of
+                EmptyWithWaiters wait_mvar -> do
                     -- NB: it's very important that we don't do this while we are holding the set_mvar!
-                    takeMVar wait_mvar
+                    --
+                    -- We are careful to readMVar here rather than takeMVar, because *there may be more
+                    -- than one waiter*. This does lead to a bit of a scrummage, because every single
+                    -- waiter will get woken up and go for newly-added data simultaneously, but the alternative
+                    -- is disconcertingly subtle.
+                    () <- readMVar wait_mvar
+                    
                     -- Someone put data in the MVar, but we might have to wait again if someone snaffles
                     -- it before we got there.
                     --
                     -- TODO: make this fairer -- there is definite starvation potential here, though it
                     -- doesn't matter for the application I have in mind (Shake)
                     loop
-                Right x -> return x
+                NonEmpty x -> return x
         
-        go (gen, Left wait_mvar) = return ((gen, Left wait_mvar), Left wait_mvar)
-        go (gen, Right xs) = do
+        peek_inside (gen, EmptyWithWaiters wait_mvar) = return ((gen, EmptyWithWaiters wait_mvar), EmptyWithWaiters wait_mvar)
+        peek_inside (gen, NonEmpty xs) = do
             let (chosen, xs') = IM.deleteFindMin xs
             new_value <- if IM.null xs'
-                          then fmap Left newEmptyMVar
-                          else return (Right xs')
-            return ((gen, new_value), Right chosen)
+                          then fmap EmptyWithWaiters newEmptyMVar
+                          else return (NonEmpty xs')
+            return ((gen, new_value), NonEmpty chosen)
 
 
 instance ConcurrentCollection Chan where
