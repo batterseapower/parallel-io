@@ -10,8 +10,8 @@ Description:        This package provides combinators for sequencing IO actions 
                     Furthermore, the parallel combinators can be used reentrantly - your parallel
                     actions can spawn more parallel actions - without violating this property of the thread pool.
                     .
-                    The package is heavily inspired by the thread <http://thread.gmane.org/gmane.comp.lang.haskell.cafe/56499/focus=56521>.
-                    Thanks to Neil Mitchell and Bulat Ziganshin for the code this package is based on.
+                    The package is inspired by the thread <http://thread.gmane.org/gmane.comp.lang.haskell.cafe/56499/focus=56521>.
+                    Thanks to Neil Mitchell and Bulat Ziganshin for some of the code this package is based on.
 License:            BSD3
 License-File:       LICENSE
 Homepage:           http://batterseapower.github.com/parallel-io
@@ -41,7 +41,6 @@ Library
         Control.Concurrent.ParallelIO.Local
     Other-Modules:    
         Control.Concurrent.ParallelIO.Compat
-        Control.Concurrent.ParallelIO.ConcurrentCollection
     
     Build-Depends:  base >= 4 && < 5, extensible-exceptions > 0.1.0.1, containers >= 0.2 && < 0.5, random >= 1.0 && < 1.1
 
