@@ -37,6 +37,10 @@ import System.IO
 import Prelude hiding (catch)
 
 
+reflectExceptionsTo :: ThreadId -> IO () -> IO ()
+reflectExceptionsTo tid act = act `catch` \e -> throwTo tid (e :: SomeException)
+
+
 -- | A thread pool, containing a maximum number of threads. The best way to
 -- construct one of these is using 'withPool'.
 data Pool = Pool {
@@ -128,13 +132,41 @@ killPoolWorkerFor pool = waitQSem (pool_sem pool)
 --  4. The above properties are true even if 'parallel_' is used by an
 --     action which is itself being executed by one of the parallel combinators.
 --
--- If any of the IO actions throws an exception, the exception thrown by the first
--- failing action in the input list will be thrown by 'parallel_'.
+--  5. If any of the IO actions throws an exception this does not prevent any of the
+--     other actions from being performed.
+--
+--  6. If any of the IO actions throws an exception, the exception thrown by the first
+--     failing action in the input list will be thrown by 'parallel_'. Importantly, at the
+--     time the exception is thrown there is no guarantee that the other parallel actions
+--     have completed.
+--
+--     The motivation for this choice is that waiting for the all threads to either return
+--     or throw before throwing the first exception will almost always cause GHC to show the
+--     "Blocked indefinitely in MVar operation" exception rather than the exception you care about.
+--
+--     The reason for this behaviour can be seen by considering this machine state:
+--
+--       1. The main thread has used the parallel combinators to spawn two threads, thread 1 and thread 2.
+--          It is blocked on both of them waiting for them to return either a result or an exception via an MVar.
+--
+--       2. Thread 1 and thread 2 share another (empty) MVar, the "wait handle". Thread 2 is waiting on the handle,
+--          while thread 2 will eventually put into the handle.
+--     
+--     Consider what happens when thread 1 is buggy and throws an exception before putting into the handle. Now
+--     thread 2 is blocked indefinitely, and so the main thread is also blocked indefinetly waiting for the result
+--     of thread 2. GHC has no choice but to throw the uninformative exception. However, what we really wanted to
+--     see was the original exception thrown in thread 1!
+--
+--     By having the main thread abandon its wait for the results of the spawned threads as soon as the first exception
+--     comes in, we give this exception a chance to actually be displayed.
 parallel_ :: Pool -> [IO a] -> IO ()
 parallel_ pool xs = parallel pool xs >> return ()
 
 -- | As 'parallel_', but instead of throwing exceptions that are thrown by subcomputations,
 -- they are returned in a data structure.
+--
+-- As a result, property 6 of 'parallel_' is not preserved, and therefore if your IO actions can depend on each other
+-- and may throw exceptions your program may die with "blocked indefinitely" exceptions rather than informative messages.
 parallelE_ :: Pool -> [IO a] -> IO [Maybe SomeException]
 parallelE_ pool = fmap (map (either Just (\_ -> Nothing))) . parallelE pool
 
@@ -156,17 +188,51 @@ parallelE_ pool = fmap (map (either Just (\_ -> Nothing))) . parallelE pool
 --  4. The above properties are true even if 'parallel' is used by an
 --     action which is itself being executed by one of the parallel combinators.
 --
--- If any of the IO actions throws an exception, the exception thrown by the first
--- failing action in the input list will be thrown by 'parallel'. This will not prevent
--- the other actions in the input list from being run (and hence we will wait on them to
--- complete before throwing).
+--  5. If any of the IO actions throws an exception this does not prevent any of the
+--     other actions from being performed.
+--
+--  6. If any of the IO actions throws an exception, the exception thrown by the first
+--     failing action in the input list will be thrown by 'parallel'. Importantly, at the
+--     time the exception is thrown there is no guarantee that the other parallel actions
+--     have completed.
+--
+--     The motivation for this choice is that waiting for the all threads to either return
+--     or throw before throwing the first exception will almost always cause GHC to show the
+--     "Blocked indefinitely in MVar operation" exception rather than the exception you care about.
+--
+--     The reason for this behaviour can be seen by considering this machine state:
+--
+--       1. The main thread has used the parallel combinators to spawn two threads, thread 1 and thread 2.
+--          It is blocked on both of them waiting for them to return either a result or an exception via an MVar.
+--
+--       2. Thread 1 and thread 2 share another (empty) MVar, the "wait handle". Thread 2 is waiting on the handle,
+--          while thread 2 will eventually put into the handle.
+--     
+--     Consider what happens when thread 1 is buggy and throws an exception before putting into the handle. Now
+--     thread 2 is blocked indefinitely, and so the main thread is also blocked indefinetly waiting for the result
+--     of thread 2. GHC has no choice but to throw the uninformative exception. However, what we really wanted to
+--     see was the original exception thrown in thread 1!
+--
+--     By having the main thread abandon its wait for the results of the spawned threads as soon as the first exception
+--     comes in, we give this exception a chance to actually be displayed.
 parallel :: Pool -> [IO a] -> IO [a]
-parallel pool xs = do
-    ei_e_ress <- parallelE pool xs
-    mapM (either throw return) ei_e_ress
+parallel pool acts = mask $ \restore -> do
+    main_tid <- myThreadId
+    resultvars <- forM acts $ \act -> do
+        resultvar <- newEmptyMVar
+        _tid <- forkIO $ bracket_ (killPoolWorkerFor pool) (spawnPoolWorkerFor pool) $ reflectExceptionsTo main_tid $ do
+            res <- restore act
+            -- Use tryPutMVar instead of putMVar so we get an exception if my brain has failed
+            True <- tryPutMVar resultvar res
+            return ()
+        return resultvar
+    extraWorkerWhileBlocked pool (mapM takeMVar resultvars)
 
 -- | As 'parallel', but instead of throwing exceptions that are thrown by subcomputations,
 -- they are returned in a data structure.
+--
+-- As a result, property 6 of 'parallel' is not preserved, and therefore if your IO actions can depend on each other
+-- and may throw exceptions your program may die with "blocked indefinitely" exceptions rather than informative messages.
 parallelE :: Pool -> [IO a] -> IO [Either SomeException a]
 parallelE pool acts = mask $ \restore -> do
     resultvars <- forM acts $ \act -> do
@@ -194,19 +260,52 @@ parallelE pool acts = mask $ \restore -> do
 --  3. The result of running actions appear in the list in undefined order, but which
 --     is likely to be very similar to the order of completion.
 --
---  3. The above properties are true even if 'parallelInterleaved' is used by an
+--  4. The above properties are true even if 'parallelInterleaved' is used by an
 --     action which is itself being executed by one of the parallel combinators.
 --
--- If any of the IO actions throws an exception, the exception we first come across
--- will be thrown by 'parallelInterleaved'. This will not prevent the other actions in the
--- input list from being run (and hence we will wait on them to complete before throwing).
+--  5. If any of the IO actions throws an exception this does not prevent any of the
+--     other actions from being performed.
+--
+--  6. If any of the IO actions throws an exception, the exception thrown by the first
+--     failing action in the input list will be thrown by 'parallelInterleaved'. Importantly, at the
+--     time the exception is thrown there is no guarantee that the other parallel actions
+--     have completed.
+--
+--     The motivation for this choice is that waiting for the all threads to either return
+--     or throw before throwing the first exception will almost always cause GHC to show the
+--     "Blocked indefinitely in MVar operation" exception rather than the exception you care about.
+--
+--     The reason for this behaviour can be seen by considering this machine state:
+--
+--       1. The main thread has used the parallel combinators to spawn two threads, thread 1 and thread 2.
+--          It is blocked on both of them waiting for them to return either a result or an exception via an MVar.
+--
+--       2. Thread 1 and thread 2 share another (empty) MVar, the "wait handle". Thread 2 is waiting on the handle,
+--          while thread 2 will eventually put into the handle.
+--     
+--     Consider what happens when thread 1 is buggy and throws an exception before putting into the handle. Now
+--     thread 2 is blocked indefinitely, and so the main thread is also blocked indefinetly waiting for the result
+--     of thread 2. GHC has no choice but to throw the uninformative exception. However, what we really wanted to
+--     see was the original exception thrown in thread 1!
+--
+--     By having the main thread abandon its wait for the results of the spawned threads as soon as the first exception
+--     comes in, we give this exception a chance to actually be displayed.
 parallelInterleaved :: Pool -> [IO a] -> IO [a]
-parallelInterleaved pool acts = do
-    ei_e_ress <- parallelInterleavedE pool acts
-    mapM (either throw return) ei_e_ress
+parallelInterleaved pool acts = mask $ \restore -> do
+    main_tid <- myThreadId
+    resultchan <- newChan
+    forM_ acts $ \act -> do
+        _tid <- forkIO $ bracket_ (killPoolWorkerFor pool) (spawnPoolWorkerFor pool) $ reflectExceptionsTo main_tid $ do
+            res <- restore act
+            writeChan resultchan res
+        return ()
+    extraWorkerWhileBlocked pool (mapM (\_act -> readChan resultchan) acts)
 
 -- | As 'parallelInterleaved', but instead of throwing exceptions that are thrown by subcomputations,
 -- they are returned in a data structure.
+--
+-- As a result, property 6 of 'parallelInterleaved' is not preserved, and therefore if your IO actions can depend on each other
+-- and may throw exceptions your program may die with "blocked indefinitely" exceptions rather than informative messages.
 parallelInterleavedE :: Pool -> [IO a] -> IO [Either SomeException a]
 parallelInterleavedE pool acts = mask $ \restore -> do
     resultchan <- newChan
