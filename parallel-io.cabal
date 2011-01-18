@@ -65,7 +65,7 @@ Executable tests
         Build-Depends:  base >= 4 && < 5, extensible-exceptions > 0.1.0.1, containers >= 0.2 && < 0.5, random >= 1.0 && < 1.1,
                         test-framework >= 0.1.1, test-framework-hunit >= 0.1.1, HUnit >= 1.2 && < 2
     
-        Ghc-Options:    -threaded
+        Ghc-Options:    -threaded -rtsopts
 
 Executable fuzz
     Main-Is:        Control/Concurrent/ParallelIO/Fuzz.hs
@@ -75,7 +75,7 @@ Executable fuzz
     else
         Build-Depends:  base >= 4 && < 5, extensible-exceptions > 0.1.0.1, containers >= 0.2 && < 0.5, random >= 1.0 && < 1.1
 
-        Ghc-Options:    -threaded
+        Ghc-Options:    -threaded -rtsopts
 
 Executable fuzz-seq
     Main-Is:        Control/Concurrent/ParallelIO/Fuzz.hs
