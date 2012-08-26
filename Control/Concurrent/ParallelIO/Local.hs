@@ -30,15 +30,14 @@ import Control.Concurrent.ParallelIO.Compat
 
 import Control.Concurrent
 import Control.Exception
+import qualified Control.Exception as E
 import Control.Monad
 
 import System.IO
 
-import Prelude hiding (catch)
-
 
 reflectExceptionsTo :: ThreadId -> IO () -> IO ()
-reflectExceptionsTo tid act = act `catch` \e -> throwTo tid (e :: SomeException)
+reflectExceptionsTo tid act = act `E.catch` \e -> throwTo tid (e :: SomeException)
 
 
 -- | A thread pool, containing a maximum number of threads. The best way to
