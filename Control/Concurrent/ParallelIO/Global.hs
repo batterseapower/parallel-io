@@ -15,7 +15,9 @@
 -- pool with one thread per capability.
 module Control.Concurrent.ParallelIO.Global (
     -- * Executing actions
-    parallel_, parallelE_, parallel, parallelE, parallelInterleaved, parallelInterleavedE,
+    parallel_, parallelE_, parallel, parallelE,
+    parallelInterleaved, parallelInterleavedE,
+    parallelFirst, parallelFirstE,
 
     -- * Global pool management
     globalPool, stopGlobalPool,
@@ -124,3 +126,21 @@ parallelInterleaved = L.parallelInterleaved globalPool
 -- See also 'L.parallelInterleavedE'.
 parallelInterleavedE :: [IO a] -> IO [Either SomeException a]
 parallelInterleavedE = L.parallelInterleavedE globalPool
+
+-- | Run the list of computations in parallel, returning the result of the first
+-- thread that completes with (Just x), if any.
+--
+-- Users of the global pool must call 'stopGlobalPool' from the main thread at the end of their program.
+--
+-- See also 'L.parallelFirst'.
+parallelFirst :: [IO (Maybe a)] -> IO (Maybe a)
+parallelFirst = L.parallelFirst globalPool
+
+-- | Run the list of computations in parallel, returning the result of the first
+-- thread that completes with (Just x), if any, and reporting any exception explicitly.
+--
+-- Users of the global pool must call 'stopGlobalPool' from the main thread at the end of their program.
+--
+-- See also 'L.parallelFirstE'.
+parallelFirstE :: [IO (Maybe a)] -> IO (Maybe (Either SomeException a))
+parallelFirstE = L.parallelFirstE globalPool

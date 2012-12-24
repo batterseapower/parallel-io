@@ -16,7 +16,9 @@
 -- with one thread per capability.
 module Control.Concurrent.ParallelIO.Local (
     -- * Executing actions
-    parallel_, parallelE_, parallel, parallelE, parallelInterleaved, parallelInterleavedE,
+    parallel_, parallelE_, parallel, parallelE,
+    parallelInterleaved, parallelInterleavedE,
+    parallelFirst, parallelFirstE,
 
     -- * Pool management
     Pool, withPool, startPool, stopPool,
@@ -36,8 +38,14 @@ import Control.Monad
 import System.IO
 
 
+catchNonThreadKilled :: IO a -> (SomeException -> IO a) -> IO a
+catchNonThreadKilled act handler = act `E.catch` \e -> case fromException e of Just ThreadKilled -> throwIO e; _ -> handler e
+
+onNonThreadKilledException :: IO a -> IO b -> IO a
+onNonThreadKilledException act handler = catchNonThreadKilled act (\e -> handler >> throwIO e)
+
 reflectExceptionsTo :: ThreadId -> IO () -> IO ()
-reflectExceptionsTo tid act = act `E.catch` \e -> throwTo tid (e :: SomeException)
+reflectExceptionsTo tid act = catchNonThreadKilled act (throwTo tid)
 
 
 -- | A thread pool, containing a maximum number of threads. The best way to
@@ -280,7 +288,7 @@ parallelE pool acts = mask $ \restore -> do
 --          It is blocked on both of them waiting for them to return either a result or an exception via an MVar.
 --
 --       2. Thread 1 and thread 2 share another (empty) MVar, the "wait handle". Thread 2 is waiting on the handle,
---          while thread 2 will eventually put into the handle.
+--          while thread 1 will eventually put into the handle.
 --     
 --     Consider what happens when thread 1 is buggy and throws an exception before putting into the handle. Now
 --     thread 2 is blocked indefinitely, and so the main thread is also blocked indefinetly waiting for the result
@@ -314,3 +322,86 @@ parallelInterleavedE pool acts = mask $ \restore -> do
             writeChan resultchan ei_e_res
         return ()
     extraWorkerWhileBlocked pool (mapM (\_act -> readChan resultchan) acts)
+
+-- | Run the list of computations in parallel, returning the result of the first
+-- thread that completes with (Just x), if any
+--
+-- Has the following properties:
+--
+--  1. Never creates more or less unblocked threads than are specified to
+--     live in the pool. NB: this count includes the thread executing 'parallelInterleaved'.
+--     This should minimize contention and hence pre-emption, while also preventing
+--     starvation.
+--
+--  2. On return all actions have either been performed or cancelled (with ThreadKilled exceptions).
+--
+--  3. The above properties are true even if 'parallelFirst' is used by an
+--     action which is itself being executed by one of the parallel combinators.
+--
+--  4. If any of the IO actions throws an exception, the exception thrown by the first
+--     throwing action in the input list will be thrown by 'parallelFirst'. Importantly, at the
+--     time the exception is thrown there is no guarantee that the other parallel actions
+--     have been completed or cancelled.
+--
+--     The motivation for this choice is that waiting for the all threads to either return
+--     or throw before throwing the first exception will almost always cause GHC to show the
+--     "Blocked indefinitely in MVar operation" exception rather than the exception you care about.
+--
+--     The reason for this behaviour can be seen by considering this machine state:
+--
+--       1. The main thread has used the parallel combinators to spawn two threads, thread 1 and thread 2.
+--          It is blocked on both of them waiting for them to return either a result or an exception via an MVar.
+--
+--       2. Thread 1 and thread 2 share another (empty) MVar, the "wait handle". Thread 2 is waiting on the handle,
+--          while thread 1 will eventually put into the handle.
+--     
+--     Consider what happens when thread 1 is buggy and throws an exception before putting into the handle. Now
+--     thread 2 is blocked indefinitely, and so the main thread is also blocked indefinetly waiting for the result
+--     of thread 2. GHC has no choice but to throw the uninformative exception. However, what we really wanted to
+--     see was the original exception thrown in thread 1!
+--
+--     By having the main thread abandon its wait for the results of the spawned threads as soon as the first exception
+--     comes in, we give this exception a chance to actually be displayed.
+parallelFirst :: Pool -> [IO (Maybe a)] -> IO (Maybe a)
+parallelFirst pool acts = mask $ \restore -> do
+    main_tid <- myThreadId
+    resultvar <- newEmptyMVar
+    (tids, waits) <- liftM unzip $ forM acts $ \act -> do
+        wait_var <- newEmptyMVar
+        tid <- forkIO $ flip onNonThreadKilledException (tryPutMVar resultvar Nothing) $                     -- If we throw an exception, unblock
+                        bracket_ (killPoolWorkerFor pool) (spawnPoolWorkerFor pool >> putMVar wait_var ()) $ -- the main thread so it can rethrow it
+                        reflectExceptionsTo main_tid $ do
+            mb_res <- restore act
+            case mb_res of
+                Nothing  -> return ()
+                Just res -> tryPutMVar resultvar (Just res) >> return ()
+        return (tid, wait_var)
+    forkIO $ mapM_ takeMVar waits >> tryPutMVar resultvar Nothing >> return ()
+    mb_res <- extraWorkerWhileBlocked pool (takeMVar resultvar)
+    mapM_ killThread tids
+    return mb_res
+
+-- | As 'parallelFirst', but instead of throwing exceptions that are thrown by subcomputations,
+-- they are returned in a data structure.
+--
+-- As a result, property 4 of 'parallelFirst' is not preserved, and therefore if your IO actions can depend on each other
+-- and may throw exceptions your program may die with "blocked indefinitely" exceptions rather than informative messages.
+parallelFirstE :: Pool -> [IO (Maybe a)] -> IO (Maybe (Either SomeException a))
+parallelFirstE pool acts = mask $ \restore -> do
+    main_tid <- myThreadId
+    resultvar <- newEmptyMVar
+    (tids, waits) <- liftM unzip $ forM acts $ \act -> do
+        wait_var <- newEmptyMVar
+        tid <- forkIO $ bracket_ (killPoolWorkerFor pool) (spawnPoolWorkerFor pool >> putMVar wait_var ()) $ do
+            ei_mb_res <- try (restore act)
+            case ei_mb_res of
+                -- NB: we aren't in danger of putting a "thread killed" exception into the MVar
+                -- since we only kill the spawned threads *after* we have already taken from resultvar
+                Left e           -> tryPutMVar resultvar (Just (Left e)) >> return ()
+                Right Nothing    -> return ()
+                Right (Just res) -> tryPutMVar resultvar (Just (Right res)) >> return ()
+        return (tid, wait_var)
+    forkIO $ mapM_ takeMVar waits >> tryPutMVar resultvar Nothing >> return ()
+    mb_res <- extraWorkerWhileBlocked pool (takeMVar resultvar)
+    mapM_ killThread tids
+    return mb_res
