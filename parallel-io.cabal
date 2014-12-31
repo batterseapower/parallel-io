@@ -42,7 +42,7 @@ Library
     Other-Modules:    
         Control.Concurrent.ParallelIO.Compat
     
-    Build-Depends:  base >= 4 && < 5, extensible-exceptions > 0.1.0.1, containers >= 0.2 && < 0.6, random >= 1.0 && < 1.1
+    Build-Depends:  base >= 4 && < 5, extensible-exceptions > 0.1.0.1, containers >= 0.2 && < 0.6, random >= 1.0 && < 1.2
 
 Executable benchmark
     Main-Is:        Control/Concurrent/ParallelIO/Benchmark.hs
