@@ -1,5 +1,6 @@
 # Cabal temporary stuff
 dist/
+dist-newstyle/
 *.o
 *.hi
 
