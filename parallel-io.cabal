@@ -1,5 +1,5 @@
 Name:               parallel-io
-Version:            0.3.3
+Version:            0.3.4
 Cabal-Version:      >= 1.2
 Category:           Concurrency
 Synopsis:           Combinators for executing IO actions in parallel on a thread pool.
@@ -42,7 +42,7 @@ Library
     Other-Modules:    
         Control.Concurrent.ParallelIO.Compat
     
-    Build-Depends:  base >= 4 && < 5, extensible-exceptions > 0.1.0.1, containers >= 0.2 && < 0.6, random >= 1.0 && < 1.2
+    Build-Depends:  base >= 4 && < 5, extensible-exceptions > 0.1.0.1, containers >= 0.2 && < 0.6, random >= 1.0 && < 1.3
 
 Executable benchmark
     Main-Is:        Control/Concurrent/ParallelIO/Benchmark.hs
@@ -50,7 +50,7 @@ Executable benchmark
     if !flag(benchmark)
         Buildable:  False
     else
-        Build-Depends:  base >= 4 && < 5, extensible-exceptions > 0.1.0.1, containers >= 0.2 && < 0.6, random >= 1.0 && < 1.2,
+        Build-Depends:  base >= 4 && < 5, extensible-exceptions > 0.1.0.1, containers >= 0.2 && < 0.6, random >= 1.0 && < 1.3,
                         time >= 1
     
         Ghc-Options:    -threaded
@@ -61,7 +61,7 @@ Executable tests
     if !flag(tests)
         Buildable:  False
     else
-        Build-Depends:  base >= 4 && < 5, extensible-exceptions > 0.1.0.1, containers >= 0.2 && < 0.6, random >= 1.0 && < 1.2,
+        Build-Depends:  base >= 4 && < 5, extensible-exceptions > 0.1.0.1, containers >= 0.2 && < 0.6, random >= 1.0 && < 1.3,
                         test-framework >= 0.1.1, test-framework-hunit >= 0.1.1, HUnit >= 1.2 && < 2
     
         Ghc-Options:    -threaded -rtsopts
@@ -72,7 +72,7 @@ Executable fuzz
     if !flag(fuzz)
         Buildable:  False
     else
-        Build-Depends:  base >= 4 && < 5, extensible-exceptions > 0.1.0.1, containers >= 0.2 && < 0.6, random >= 1.0 && < 1.2
+        Build-Depends:  base >= 4 && < 5, extensible-exceptions > 0.1.0.1, containers >= 0.2 && < 0.6, random >= 1.0 && < 1.3
 
         Ghc-Options:    -threaded -rtsopts
 
@@ -82,4 +82,4 @@ Executable fuzz-seq
     if !flag(fuzz)
         Buildable:  False
     else
-        Build-Depends:  base >= 4 && < 5, extensible-exceptions > 0.1.0.1, containers >= 0.2 && < 0.6, random >= 1.0 && < 1.2
+        Build-Depends:  base >= 4 && < 5, extensible-exceptions > 0.1.0.1, containers >= 0.2 && < 0.6, random >= 1.0 && < 1.3
