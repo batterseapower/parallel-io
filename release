@@ -51,7 +51,7 @@ fi
 
 # You need to have stored your Hackage username and password as directed by cabal-upload
 # I use -v3 because otherwise the error messages can be cryptic :-)
-cabal upload -v3 $filename
+cabal upload --publish -v3 $filename
 
 if [ "$?" != "0" ]; then
     echo "Hackage upload failed, aborting"
