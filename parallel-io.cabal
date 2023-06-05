@@ -14,7 +14,7 @@ Description:        This package provides combinators for sequencing IO actions 
                     Thanks to Neil Mitchell and Bulat Ziganshin for some of the code this package is based on.
 License:            BSD3
 License-File:       LICENSE
-Homepage:           http://batterseapower.github.com/parallel-io
+Homepage:           https://github.com/batterseapower/parallel-io
 Author:             Max Bolingbroke <batterseapower@hotmail.com>,
                     Neil Mitchell <ndmitchell@gmail.com>,
                     Bulat Ziganshin <bulat.ziganshin@gmail.com>
